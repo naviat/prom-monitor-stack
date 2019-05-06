@@ -2,7 +2,7 @@ version: "3"
 
 services:
   frontend:
-    image: smashwilson/lets-nginx
+    image: naviat/lets-en-nginx
     env_file: .env
     environment:
       - UPSTREAM=grafana:3000
