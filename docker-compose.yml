@@ -1,0 +1,78 @@
+version: "3"
+
+services:
+  frontend:
+    image: smashwilson/lets-nginx
+    env_file: .env
+    environment:
+      - UPSTREAM=grafana:3000
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - letsencrypt_backups:/var/lib/letsencrypt
+      - dhparam_cache:/cache
+    ports:
+      - "443:443"
+    links:
+      - grafana
+
+  grafana:
+    image: grafana/grafana
+    env_file: .env
+    volumes:
+      - grafana_data:/var/lib/grafana
+    links:
+      - prometheus
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - prometheus_data:/prometheus
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./config/alert.rules:/etc/prometheus/alert.rules
+    links:
+      - node_exporter
+      - alertmanager
+    command:
+      - -config.file=/etc/prometheus/prometheus.yml
+      - -alertmanager.url=http://alertmanager:9093
+
+  alertmanager:
+    image: prom/alertmanager
+    volumes:
+      - ./config/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    depends_on:
+      - configuration_manager
+    command:
+      - -config.file=/etc/alertmanager/alertmanager.yml
+
+  node_exporter:
+    image: prom/node-exporter
+    volumes:
+      - /proc:/host/proc
+      - /sys:/host/sys
+      - /:/rootfs
+    command:
+      - -collector.procfs=/host/proc
+      - -collector.sysfs=/host/sys
+      - -collector.filesystem.ignored-mount-points="^/(sys|proc|dev|host|etc)($$|/)"
+
+  configuration_manager:
+    image: busybox
+    env_file: .env
+    volumes:
+      - ./config:/config
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - sed "s,ALERT_SLACK_USERNAME,$ALERT_SLACK_USERNAME,g;
+             s,ALERT_SLACK_CHANNEL,$ALERT_SLACK_CHANNEL,g;
+             s,ALERT_SLACK_INCOMING_WEBHOOK_URL,$ALERT_SLACK_INCOMING_WEBHOOK_URL,g"
+             /config/alertmanager.template.yml > /config/alertmanager.yml
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  letsencrypt:
+  letsencrypt_backups:
+  dhparam_cache:
